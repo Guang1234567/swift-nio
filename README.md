@@ -1,3 +1,10 @@
+# My Changed
+
+- 2010-02-11
+ - fix for Android os base on ndk >= 16
+ - fix in `master` branch which base on v2.x.x
+ - fix in `nio-1.14` branch which the lastest v1.x . Maybe perfer this version unless upgrade your project.
+
 # SwiftNIO
 
 SwiftNIO is a cross-platform asynchronous event-driven network application framework
