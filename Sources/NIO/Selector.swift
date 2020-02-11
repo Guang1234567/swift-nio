@@ -209,7 +209,7 @@ extension EpollFilterSet {
 }
 
 extension SelectorEventSet {
-    #if os(Linux)
+    #if os(Linux) || os(Android)
     var epollEventSet: UInt32 {
         assert(self != ._none)
         // EPOLLERR | EPOLLHUP is always set unconditionally anyway but it's easier to understand if we explicitly ask.
@@ -257,7 +257,7 @@ extension SelectorEventSet {
 internal class Selector<R: Registration> {
     private var lifecycleState: SelectorLifecycleState
 
-    #if os(Linux)
+    #if os(Linux) || os(Android)
     private typealias EventType = Epoll.epoll_event
     private var earliestTimer: NIODeadline = .distantFuture
     #else
@@ -275,7 +275,7 @@ internal class Selector<R: Registration> {
     // reads: `self.externalSelectorFDLock` OR access from the EventLoop thread
     // writes: `self.externalSelectorFDLock` AND access from the EventLoop thread
     private var selectorFD: CInt // -1 == we're closed
-    #if os(Linux)
+    #if os(Linux) || os(Android)
     private var eventFD: CInt // -1 == we're closed
     private var timerFD: CInt // -1 == we're closed
     #endif
@@ -319,7 +319,7 @@ internal class Selector<R: Registration> {
         events = Selector.allocateEventsArray(capacity: eventsCapacity)
         self.lifecycleState = .closed
 
-#if os(Linux)
+#if os(Linux) || os(Android)
         self.selectorFD = try Epoll.epoll_create(size: 128)
         self.eventFD = try EventFd.eventfd(initval: 0, flags: Int32(EventFd.EFD_CLOEXEC | EventFd.EFD_NONBLOCK))
         self.timerFD = try TimerFd.timerfd_create(clockId: CLOCK_MONOTONIC, flags: Int32(TimerFd.TFD_CLOEXEC | TimerFd.TFD_NONBLOCK))
@@ -359,7 +359,7 @@ internal class Selector<R: Registration> {
         Selector.deallocateEventsArray(events: events, capacity: eventsCapacity)
 
         assert(self.selectorFD == -1, "self.selectorFD == \(self.selectorFD) on Selector deinit, forgot close?")
-        #if os(Linux)
+        #if os(Linux) || os(Android)
         assert(self.eventFD == -1, "self.eventFD == \(self.eventFD) on Selector deinit, forgot close?")
         #endif
     }
@@ -433,7 +433,7 @@ internal class Selector<R: Registration> {
 
         try selectable.withUnsafeFileDescriptor { fd in
             assert(registrations[Int(fd)] == nil)
-            #if os(Linux)
+            #if os(Linux)  || os(Android)
                 var ev = Epoll.epoll_event()
                 ev.events = interested.epollEventSet
                 ev.data.fd = fd
@@ -460,7 +460,7 @@ internal class Selector<R: Registration> {
         try selectable.withUnsafeFileDescriptor { fd in
             var reg = registrations[Int(fd)]!
 
-            #if os(Linux)
+            #if os(Linux) || os(Android)
                 var ev = Epoll.epoll_event()
                 ev.events = interested.epollEventSet
                 ev.data.fd = fd
@@ -492,7 +492,7 @@ internal class Selector<R: Registration> {
                 return
             }
 
-            #if os(Linux)
+            #if os(Linux) || os(Android)
                 var ev = Epoll.epoll_event()
                 _ = try Epoll.epoll_ctl(epfd: self.selectorFD, op: Epoll.EPOLL_CTL_DEL, fd: fd, event: &ev)
             #else
@@ -512,7 +512,7 @@ internal class Selector<R: Registration> {
             throw IOError(errnoCode: EBADF, reason: "can't call whenReady for selector as it's \(self.lifecycleState).")
         }
 
-#if os(Linux)
+#if os(Linux) || os(Android)
         let ready: Int
 
         switch strategy {
@@ -645,7 +645,7 @@ internal class Selector<R: Registration> {
             // Therefore, we assert here that close will always succeed and if not, that's a NIO bug we need to know
             // about.
 
-            #if os(Linux)
+            #if os(Linux) || os(Android)
             try! Posix.close(descriptor: self.timerFD)
             try! Posix.close(descriptor: self.eventFD)
 
@@ -662,7 +662,7 @@ internal class Selector<R: Registration> {
     func wakeup() throws {
         assert(NIOThread.current != self.myThread)
         try self.externalSelectorFDLock.withLock {
-        #if os(Linux)
+        #if os(Linux) || os(Android)
             guard self.eventFD >= 0 else {
                 throw EventLoopError.shutdown
             }
